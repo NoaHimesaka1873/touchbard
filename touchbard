@@ -24,10 +24,12 @@ doesFnmodeExist = False
 paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
 for path in paths:
     if path.exists():
-       doesFnmodeExist = True
-       continue
+        doesFnmodeExist = True
+        continue
 if not doesFnmodeExist:
-    print("Touchbar Daemon cannot find fnmode file. Check whether apple-touchbar kernel module is loaded.")
+    print(
+        "Touchbar Daemon cannot find fnmode file. Check whether apple-touchbar kernel module is loaded."
+    )
     exit(1)
 
 # This is the path to the socket file that Touchbar Daemon creates
@@ -41,10 +43,12 @@ CONFIG_PATH = "/etc/touchbard.conf"
 
 # check if touchbard is running
 if os.path.exists(PID_PATH):
-    with open (PID_PATH, "r") as pid_file:
+    with open(PID_PATH, "r") as pid_file:
         pid = pid_file.read()
         if not os.path.exists("/proc/" + pid):
-            print("Touchbar Daemon is not running, but PID file exists, indicating a previous crash. Removing remaining files...")
+            print(
+                "Touchbar Daemon is not running, but PID file exists, indicating a previous crash. Removing remaining files..."
+            )
             try:
                 os.remove(PID_PATH)
             except:
@@ -63,6 +67,7 @@ if os.path.exists(PID_PATH):
 if not os.path.exists("/run/touchbard"):
     os.makedirs("/run/touchbard")
 
+
 # Gracefully exit on SIGTERM or SIGINT
 def signal_handler(signal, frame):
     global server
@@ -72,6 +77,7 @@ def signal_handler(signal, frame):
     os.remove(PID_PATH)
     print("Touchbar Daemon has shut down.")
     exit()
+
 
 # set up signal handler
 signal.signal(signal.SIGTERM, signal_handler)
@@ -85,6 +91,7 @@ print("Touchbar Daemon is starting...")
 # Delete socket file if it exists
 if os.path.exists(SOCKET_PATH):
     os.remove(SOCKET_PATH)
+
 
 # function for writing fnmode
 def writeFnmode(mode: int):
@@ -102,10 +109,16 @@ def writeFnmode(mode: int):
                         # write fnmode
                         f.write(str(mode))
                         # send and print success message
-                        return {"status": "SUCCESS", "message": f"fnmode set successfully to {mode}"}
+                        return {
+                            "status": "SUCCESS",
+                            "message": f"fnmode set successfully to {mode}",
+                        }
                 except:
-                        return {"status": "ERROR", "message": "Write error: Could not write to fnmode file"}
-    
+                    return {
+                        "status": "ERROR",
+                        "message": "Write error: Could not write to fnmode file",
+                    }
+
 
 # function for sending and printing fnmode
 def printAndSendResult(result, conn):
@@ -115,8 +128,9 @@ def printAndSendResult(result, conn):
     except BrokenPipeError:
         return False
     except AttributeError:
-        return True 
+        return True
     return True
+
 
 # parse config file and set default fnmode
 config = configparser.ConfigParser()
@@ -168,11 +182,17 @@ while True:
         isPipeOpen = printAndSendResult(result, conn)
     except json.decoder.JSONDecodeError:
         # if payload is not valid JSON, send and print error message
-        error = {"status": "ERROR", "message": "Invalid JSON: payload is not valid JSON"}
+        error = {
+            "status": "ERROR",
+            "message": "Invalid JSON: payload is not valid JSON",
+        }
         isPipeOpen = printAndSendResult(error, conn)
     except ValueError:
         # if fnmode is not an integer, send and print error message
-        error = {"status": "ERROR", "message": "Invalid fnmode: fnmode must be an integer between 0 and 4"}
+        error = {
+            "status": "ERROR",
+            "message": "Invalid fnmode: fnmode must be an integer between 0 and 4",
+        }
         isPipeOpen = printAndSendResult(error, conn)
     # Check if connection was broken and print warning if it was
     if not isPipeOpen:
