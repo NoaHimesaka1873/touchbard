@@ -1,0 +1,11 @@
+[Unit]
+Description=Touchbar Daemon for controlling Touch Bar status
+
+[service]
+Type=simple
+Restart=always
+RestartSec=2
+ExecStart=/usr/bin/touchbard
+
+[Install]
+WantedBy=default.target

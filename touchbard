@@ -1,0 +1,180 @@
+#!/usr/bin/python
+# SPDX-License-Identifier: GPL-3.0
+# Copyleft 2023 Noa Himesaka. Some rights reserved.
+
+import socket
+import os, os.path
+import json
+import signal
+import configparser
+from glob import glob
+from pathlib import Path
+
+# check if __main__ is the name of the current module and exit if not
+if __name__ != "__main__":
+    exit(1)
+
+# exit if not running as root
+if os.geteuid() != 0:
+    print("Touchbar Daemon must be run as root")
+    exit(1)
+
+# check whether fnmode file exists
+doesFnmodeExist = False
+paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
+for path in paths:
+    if path.exists():
+       doesFnmodeExist = True
+       continue
+if not doesFnmodeExist:
+    print("Touchbar Daemon cannot find fnmode file. Check whether apple-touchbar kernel module is loaded.")
+    exit(1)
+
+# This is the path to the socket file that Touchbar Daemon creates
+SOCKET_PATH = "/run/touchbard/touchbard.sock"
+
+# This is the path to the PID file that Touchbar Daemon creates
+PID_PATH = "/run/touchbard/touchbard.pid"
+
+# This is the path to the configuration file that Touchbar Daemon uses
+CONFIG_PATH = "/etc/touchbard.conf"
+
+# check if touchbard is running
+if os.path.exists(PID_PATH):
+    with open (PID_PATH, "r") as pid_file:
+        pid = pid_file.read()
+        if not os.path.exists("/proc/" + pid):
+            print("Touchbar Daemon is not running, but PID file exists, indicating a previous crash. Removing remaining files...")
+            try:
+                os.remove(PID_PATH)
+            except:
+                # do nothing
+                pass
+            try:
+                os.remove(SOCKET_PATH)
+            except:
+                # do nothing
+                pass
+        else:
+            print("Touchbar Daemon is already running")
+            exit(1)
+
+# create /run/touchbard
+if not os.path.exists("/run/touchbard"):
+    os.makedirs("/run/touchbard")
+
+# Gracefully exit on SIGTERM or SIGINT
+def signal_handler(signal, frame):
+    global server
+    print("Touchbar Daemon is shutting down...")
+    server.close()
+    os.remove(SOCKET_PATH)
+    os.remove(PID_PATH)
+    print("Touchbar Daemon has shut down.")
+    exit()
+
+# set up signal handler
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+
+# Write PID file
+with open(PID_PATH, "w") as f:
+    f.write(str(os.getpid()))
+
+print("Touchbar Daemon is starting...")
+# Delete socket file if it exists
+if os.path.exists(SOCKET_PATH):
+    os.remove(SOCKET_PATH)
+
+# function for writing fnmode
+def writeFnmode(mode: int):
+    # check whether fnmode is valid
+    if mode not in range(5):
+        return {"status": "ERROR", "message": f"Invalid fnmode: {mode}"}
+    else:
+        # check for possible fnmode locations
+        paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
+        for path in paths:
+            # if it's there, write to it
+            if path.exists():
+                try:
+                    with path.open("w") as f:
+                        # write fnmode
+                        f.write(str(mode))
+                        # send and print success message
+                        return {"status": "SUCCESS", "message": f"fnmode set successfully to {mode}"}
+                except:
+                        return {"status": "ERROR", "message": "Write error: Could not write to fnmode file"}
+    
+
+# function for sending and printing fnmode
+def printAndSendResult(result, conn):
+    print(f"{result['status']}: {result['message']}")
+    try:
+        conn.send(json.dumps(result).encode("UTF-8"))
+    except BrokenPipeError:
+        return False
+    except AttributeError:
+        return True 
+    return True
+
+# parse config file and set default fnmode
+config = configparser.ConfigParser()
+try:
+    config.read(CONFIG_PATH)
+except:
+    result = {"status": "ERROR", "message": "Could not read configuration file"}
+    exit(1)
+
+if not "DEFAULT" in config:
+    result = {"status": "ERROR", "message": "Config file is missing [DEFAULT] section"}
+    printAndSendResult(result, None)
+    exit(1)
+if "fnmode" in config["DEFAULT"]:
+    # if fnmode is in config file, set it
+    try:
+        result = writeFnmode(int(config["DEFAULT"]["fnmode"]))
+        printAndSendResult(result, None)
+    except ValueError:
+        result = {"status": "ERROR", "message": "Config file contains invalid fnmode"}
+        printAndSendResult(result, None)
+        exit(1)
+else:
+    result = {"status": "ERROR", "message": "Config file is missing fnmode"}
+    printAndSendResult(result, None)
+    exit(1)
+
+# Open socket
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+server.bind(SOCKET_PATH)
+
+# set folder and file permission to root only
+os.chmod("/run/touchbard", 0o700)
+os.chmod(SOCKET_PATH, 0o700)
+os.chmod(PID_PATH, 0o700)
+
+# Run main loop until SIGTERM or SIGINT is received
+while True:
+    server.listen(1)
+    conn, addr = server.accept()
+    # Read data from socket, decode it, and load it as JSON
+    rawjson = conn.recv(1024).decode("UTF-8")
+    # Variable for checking whether pipe is still open
+    isPipeOpen = True
+    try:
+        # try to load JSON
+        data = json.loads(rawjson)
+        result = writeFnmode(int(data["fnmode"]))
+        isPipeOpen = printAndSendResult(result, conn)
+    except json.decoder.JSONDecodeError:
+        # if payload is not valid JSON, send and print error message
+        error = {"status": "ERROR", "message": "Invalid JSON: payload is not valid JSON"}
+        isPipeOpen = printAndSendResult(error, conn)
+    except ValueError:
+        # if fnmode is not an integer, send and print error message
+        error = {"status": "ERROR", "message": "Invalid fnmode: fnmode must be an integer between 0 and 4"}
+        isPipeOpen = printAndSendResult(error, conn)
+    # Check if connection was broken and print warning if it was
+    if not isPipeOpen:
+        print("WARNING: Connection to client was closed before response could be sent")
+    conn.close()

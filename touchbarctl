@@ -1,0 +1,19 @@
+#!/usr/bin/python
+import socket
+import os, os.path
+from collections import deque
+import json
+
+if not os.path.exists("/run/touchbard/touchbard.sock"):
+    print("Touchbar server not running")
+    exit(1)
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect("/run/touchbard/touchbard.sock")
+fnmode = input("Enter function mode: ")
+data = {"fnmode": fnmode}
+sock.send(json.dumps(data).encode("utf-8"))
+# read response
+responce = sock.recv(1024)
+print(responce.decode("utf-8"))
+sock.close()
