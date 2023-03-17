@@ -93,6 +93,26 @@ if os.path.exists(SOCKET_PATH):
     os.remove(SOCKET_PATH)
 
 
+# function for reading fnmode
+def readFnmode():
+    # check for possible fnmode locations
+    paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
+    for path in paths:
+        # if it's there, read from it
+        if path.exists():
+            try:
+                with path.open("r") as f:
+                    # read fnmode
+                    mode = f.read().strip("\n")
+                    # send and print success message
+                    return {"status": "SUCCESS", "message": mode}
+            except:
+                return {
+                    "status": "ERROR",
+                    "message": "Read error: Could not read from fnmode file",
+                }
+
+
 # function for writing fnmode
 def writeFnmode(mode: int):
     # check whether fnmode is valid
@@ -178,8 +198,12 @@ while True:
     try:
         # try to load JSON
         data = json.loads(rawjson)
-        result = writeFnmode(int(data["fnmode"]))
-        isPipeOpen = printAndSendResult(result, conn)
+        if data["fnmode"] == "read":
+            result = readFnmode()
+            isPipeOpen = printAndSendResult(result, conn)
+        else:
+            result = writeFnmode(int(data["fnmode"]))
+            isPipeOpen = printAndSendResult(result, conn)
     except json.decoder.JSONDecodeError:
         # if payload is not valid JSON, send and print error message
         error = {
@@ -188,10 +212,10 @@ while True:
         }
         isPipeOpen = printAndSendResult(error, conn)
     except ValueError:
-        # if fnmode is not an integer, send and print error message
+        # if fnmode is not an integer or not "read", send and print error message
         error = {
             "status": "ERROR",
-            "message": "Invalid fnmode: fnmode must be an integer between 0 and 4",
+            "message": 'Invalid fnmode: fnmode must be an integer between 0 and 4 or "read" to read the current fnmode',
         }
         isPipeOpen = printAndSendResult(error, conn)
     # Check if connection was broken and print warning if it was
