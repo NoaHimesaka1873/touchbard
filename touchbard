@@ -182,10 +182,10 @@ else:
 server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 server.bind(SOCKET_PATH)
 
-# set folder and file permission to root only
-os.chmod("/run/touchbard", 0o700)
-os.chmod(SOCKET_PATH, 0o700)
-os.chmod(PID_PATH, 0o700)
+# set folder and file permission
+os.chmod("/run/touchbard", 0o755)
+os.chmod(SOCKET_PATH, 0o666)
+os.chmod(PID_PATH, 0o600)
 
 # Run main loop until SIGTERM or SIGINT is received
 while True:

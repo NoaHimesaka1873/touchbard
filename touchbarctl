@@ -1,19 +1,57 @@
 #!/usr/bin/python
+# SPDX-License-Identifier: GPL-3.0
+# Copyleft 2023 Noa Himesaka. Some rights reserved.
+
+import argparse
 import socket
 import os, os.path
-from collections import deque
 import json
 
+parser = argparse.ArgumentParser(
+    description="touchbarctl - control Touchbar Daemon",
+    epilog="This program is part of Touchbar Daemon. For more information, see https://github.com/NoaHimesaka1873/touchbard",
+)
+
+parser.add_argument(
+    "command",
+    help="command to send to Touchbar Daemon",
+    choices=["set", "get"],
+    type=str,
+)
+parser.add_argument(
+    "mode", help="mode to set", choices=range(5), type=int, nargs="?", default=None
+)
+
+
 if not os.path.exists("/run/touchbard/touchbard.sock"):
-    print("Touchbar server not running")
+    print("Touchbar Daemon is not running")
+    exit(1)
+
+args = parser.parse_args()
+
+if args.command == "get":
+    fnmode = "read"
+elif args.command == "set" and args.mode is not None:
+    fnmode = str(args.mode)
+else:
+    print("Invalid argument: you must specify a mode to set")
     exit(1)
 
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 sock.connect("/run/touchbard/touchbard.sock")
-fnmode = input("Enter function mode: ")
+
 data = {"fnmode": fnmode}
 sock.send(json.dumps(data).encode("utf-8"))
 # read response
 responce = sock.recv(1024)
-print(responce.decode("utf-8"))
 sock.close()
+responce = json.loads(responce.decode("utf-8"))
+
+if responce["status"] == "SUCCESS":
+    if args.command == "get":
+        print("Current mode: " + responce["message"])
+    elif args.command == "set":
+        print(f"Mode set to {args.mode} successfully")
+else:
+    print("Error: " + responce["message"])
+    exit(1)
