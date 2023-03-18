@@ -1,7 +1,7 @@
 [Unit]
 Description=Touchbar Daemon for controlling Touch Bar status
 
-[service]
+[Service]
 Type=simple
 Restart=always
 RestartSec=2
