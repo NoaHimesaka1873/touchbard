@@ -19,4 +19,5 @@ package() {
     install -Dm755 touchbard.example.conf "$pkgdir/etc/touchbard.conf"
     install -Dm700 touchbard "$pkgdir/usr/bin/touchbard"
     install -Dm755 touchbarctl "$pkgdir/usr/bin/touchbarctl"
+    install -Dm644 touchbard.service "$pkgdir/usr/lib/systemd/system/touchbard.service"
 }
