@@ -1,6 +1,6 @@
 # Maintainer: Noa Himesaka <himesaka@noa.codes>
 pkgname=touchbard
-pkgver=1.0.1
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Simple and working daemon and matching control program for configuring Touchbar"
 arch=('x86_64')

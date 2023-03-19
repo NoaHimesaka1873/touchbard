@@ -7,21 +7,78 @@ import socket
 import os, os.path
 import json
 
+
+# function to send command to socket
+def send_command(operation: str, key: str, value: str = ""):
+    # construct command
+    command = {
+        "fnmode": 9,
+        "version": 2,
+        "operation": operation,
+        "key": key,
+        "value": value,
+    }
+
+    # open socket
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect("/run/touchbard/touchbard.sock")
+
+    # send command
+    sock.send(json.dumps(command).encode("utf-8"))
+
+    # receive and return response
+    return json.loads(sock.recv(1024).decode("utf-8"))
+
+
 parser = argparse.ArgumentParser(
     description="touchbarctl - control Touchbar Daemon",
     epilog="This program is part of Touchbar Daemon. For more information, see https://github.com/NoaHimesaka1873/touchbard",
 )
 
-parser.add_argument(
-    "command",
-    help="command to send to Touchbar Daemon",
-    choices=["set", "get"],
-    type=str,
+subparsers = parser.add_subparsers(dest="command", help="command to run")
+
+fnmode = subparsers.add_parser("fnmode", help="set function key mode")
+fnmode.add_argument("mode", choices=["read", "write"], help="read or write mode")
+fnmode.add_argument(
+    "--persistent",
+    action="store_true",
+    help="set persistent mode (saves to config file)",
 )
-parser.add_argument(
-    "mode", help="mode to set", choices=range(5), type=int, nargs="?", default=None
+fnmode.add_argument(
+    "value",
+    choices=range(5),
+    type=int,
+    nargs="?",
+    help="value to set (https://github.com/NoaHimesaka1873/touchbard/blob/senpai/PROTOCOL.md for more info)",
 )
 
+idle_timeout = subparsers.add_parser("idle-timeout", help="set idle timeout")
+idle_timeout.add_argument("mode", choices=["read", "write"], help="read or write mode")
+idle_timeout.add_argument(
+    "--persistent",
+    action="store_true",
+    help="set persistent mode (saves to config file)",
+)
+idle_timeout.add_argument(
+    "value",
+    type=int,
+    nargs="?",
+    help="value to set (https://github.com/NoaHimesaka1873/touchbard/blob/senpai/PROTOCOL.md for more info)",
+)
+
+dim_timeout = subparsers.add_parser("dim-timeout", help="set dim timeout")
+dim_timeout.add_argument("mode", choices=["read", "write"], help="read or write mode")
+dim_timeout.add_argument(
+    "--persistent",
+    action="store_true",
+    help="set persistent mode (saves to config file)",
+)
+dim_timeout.add_argument(
+    "value",
+    type=int,
+    nargs="?",
+    help="value to set (https://github.com/NoaHimesaka1873/touchbard/blob/senpai/PROTOCOL.md for more info)",
+)
 
 if not os.path.exists("/run/touchbard/touchbard.sock"):
     print("Touchbar Daemon is not running")
@@ -29,29 +86,91 @@ if not os.path.exists("/run/touchbard/touchbard.sock"):
 
 args = parser.parse_args()
 
-if args.command == "get":
-    fnmode = "read"
-elif args.command == "set" and args.mode is not None:
-    fnmode = str(args.mode)
-else:
-    print("Invalid argument: you must specify a mode to set")
-    exit(1)
-
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect("/run/touchbard/touchbard.sock")
-
-data = {"fnmode": fnmode}
-sock.send(json.dumps(data).encode("utf-8"))
-# read response
-responce = sock.recv(1024)
-sock.close()
-responce = json.loads(responce.decode("utf-8"))
-
-if responce["status"] == "SUCCESS":
-    if args.command == "get":
-        print("Current mode: " + responce["message"])
-    elif args.command == "set":
-        print(f"Mode set to {args.mode} successfully")
-else:
-    print("Error: " + responce["message"])
-    exit(1)
+match args.command:
+    case "fnmode":
+        if args.mode == "read":
+            if args.persistent:
+                result = send_command("readcfg", "fnmode")
+            else:
+                result = send_command("read", "fnmode")
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Function key mode: {result['value']}")
+        elif args.mode == "write":
+            if args.value is None:
+                print("ERROR: value is required")
+                exit(1)
+            if args.value not in range(5):
+                print("ERROR: value must be in range 0-4")
+                exit(1)
+            if args.persistent:
+                result = send_command("writecfg", "fnmode", args.value)
+                if result["status"] == "ERROR":
+                    print(f"ERROR: {result['message']}")
+                    exit(1)
+                result = send_command("write", "fnmode", args.value)
+            else:
+                result = send_command("write", "fnmode", args.value)
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Function key mode set to {result['value']}")
+    case "idle-timeout":
+        if args.mode == "read":
+            if args.persistent:
+                result = send_command("readcfg", "idle_timeout")
+            else:
+                result = send_command("read", "idle_timeout")
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Idle timeout: {result['value']}")
+        elif args.mode == "write":
+            if args.value is None:
+                print("ERROR: value is required")
+                exit()
+            if not args.value >= -2:
+                print("ERROR: value must be -2 or greater")
+                exit(1)
+            if args.persistent:
+                result = send_command("writecfg", "idle_timeout", args.value)
+                if result["status"] == "ERROR":
+                    print(f"ERROR: {result['message']}")
+                    exit(1)
+                result = send_command("write", "idle_timeout", args.value)
+            else:
+                result = send_command("write", "idle_timeout", args.value)
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Idle timeout set to {result['value']}")
+    case "dim-timeout":
+        if args.mode == "read":
+            if args.persistent:
+                result = send_command("readcfg", "dim_timeout")
+            else:
+                result = send_command("read", "dim_timeout")
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Dim timeout: {result['value']}")
+        elif args.mode == "write":
+            if args.value is None:
+                print("ERROR: value is required")
+                exit(1)
+            if not args.value >= -2:
+                print("ERROR: value must be -2 or greater")
+                exit(1)
+            if args.persistent:
+                result = send_command("writecfg", "dim_timeout", args.value)
+                if result["status"] == "ERROR":
+                    print(f"ERROR: {result['message']}")
+                    exit(1)
+                result = send_command("write", "dim_timeout", args.value)
+            else:
+                result = send_command("write", "dim_timeout", args.value)
+            if result["status"] == "ERROR":
+                print(f"ERROR: {result['message']}")
+                exit(1)
+            print(f"Dim timeout set to {result['value']}")

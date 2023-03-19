@@ -94,50 +94,89 @@ if os.path.exists(SOCKET_PATH):
 
 
 # function for reading fnmode
-def readFnmode():
+def read(key: str):
     # check for possible fnmode locations
-    paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
+    paths = [Path(p) for p in glob(f"/sys/class/input/*/device/{key}")]
     for path in paths:
         # if it's there, read from it
         if path.exists():
             try:
                 with path.open("r") as f:
                     # read fnmode
-                    mode = f.read().strip("\n")
+                    value = f.read().strip("\n")
                     # send and print success message
-                    return {"status": "SUCCESS", "message": mode}
+                    return {
+                        "status": "SUCCESS",
+                        "message": f"Successfully read {value} from {key}",
+                        "value": value,
+                    }
             except:
                 return {
                     "status": "ERROR",
-                    "message": "Read error: Could not read from fnmode file",
+                    "message": f"Read error: Could not read from {key}",
                 }
+    return {
+        "status": "ERROR",
+        "message": f"Read error: Could not find {key} file",
+    }
 
 
 # function for writing fnmode
-def writeFnmode(mode: int):
-    # check whether fnmode is valid
-    if mode not in range(5):
-        return {"status": "ERROR", "message": f"Invalid fnmode: {mode}"}
-    else:
-        # check for possible fnmode locations
-        paths = [Path(p) for p in glob("/sys/class/input/*/device/fnmode")]
-        for path in paths:
-            # if it's there, write to it
-            if path.exists():
-                try:
-                    with path.open("w") as f:
-                        # write fnmode
-                        f.write(str(mode))
-                        # send and print success message
-                        return {
-                            "status": "SUCCESS",
-                            "message": f"fnmode set successfully to {mode}",
-                        }
-                except:
+def write(key: str, value: int):
+    # check for possible fnmode locations
+    paths = [Path(p) for p in glob(f"/sys/class/input/*/device/{key}")]
+    for path in paths:
+        # if it's there, write to it
+        if path.exists():
+            try:
+                with path.open("w") as f:
+                    # write value
+                    f.write(str(value))
+                    # send and print success message
                     return {
-                        "status": "ERROR",
-                        "message": "Write error: Could not write to fnmode file",
+                        "status": "SUCCESS",
+                        "message": f"{key} set successfully to {value}",
+                        "value": value,
                     }
+            except:
+                return {
+                    "status": "ERROR",
+                    "message": "Write error: Could not write to {key} file",
+                }
+    return {
+        "status": "ERROR",
+        "message": f"Write error: Could not find {key} file",
+    }
+
+
+# function for reading from config file
+def readFromConfig(key: str):
+    config = configparser.ConfigParser()
+    try:
+        config.read(CONFIG_PATH)
+    except:
+        return {"status": "ERROR", "message": "Could not read configuration file"}
+    if not "DEFAULT" in config:
+        return {
+            "status": "ERROR",
+            "message": "Config file is missing [DEFAULT] section",
+        }
+    if not key in config["DEFAULT"]:
+        return {
+            "status": "ERROR",
+            "message": f"Config file is missing {key} option in [DEFAULT] section",
+        }
+    try:
+        return {
+            "status": "SUCCESS",
+            "message": f"successfully read {int(config['DEFAULT'][key])} from {key} in config file",
+            "value": int(config["DEFAULT"][key]),
+        }
+    except ValueError:
+        return {
+            "status": "ERROR",
+            "message": f"Config file contains invalid {key} value",
+        }
 
 
 # function for sending and printing fnmode
@@ -152,31 +191,65 @@ def printAndSendResult(result, conn):
     return True
 
 
-# parse config file and set default fnmode
-config = configparser.ConfigParser()
-try:
-    config.read(CONFIG_PATH)
-except:
-    result = {"status": "ERROR", "message": "Could not read configuration file"}
-    exit(1)
-
-if not "DEFAULT" in config:
-    result = {"status": "ERROR", "message": "Config file is missing [DEFAULT] section"}
+# read config file and apply values from config file
+for key in ["fnmode", "idle_timeout", "dim_timeout"]:
+    result = readFromConfig(key)
     printAndSendResult(result, None)
-    exit(1)
-if "fnmode" in config["DEFAULT"]:
-    # if fnmode is in config file, set it
-    try:
-        result = writeFnmode(int(config["DEFAULT"]["fnmode"]))
-        printAndSendResult(result, None)
-    except ValueError:
-        result = {"status": "ERROR", "message": "Config file contains invalid fnmode"}
-        printAndSendResult(result, None)
+    if result["status"] == "ERROR":
         exit(1)
-else:
-    result = {"status": "ERROR", "message": "Config file is missing fnmode"}
+    result = write(key, int(result["value"]))
     printAndSendResult(result, None)
-    exit(1)
+    if result["status"] == "ERROR":
+        exit(1)
+
+
+# function for check whether value is valid
+def checkData(data: dict):
+    try:
+        if int(data["version"]) != 2:
+            return False
+        if "key" not in data:
+            return False
+        if data["operation"] not in ["read", "readcfg", "writecfg", "write"]:
+            return False
+        if data["operation"] in ["writecfg", "write"] and "value" not in data:
+            return False
+        if data["key"] in ["fnmode", "idle_timeout", "dim_timeout"] and data[
+            "operation"
+        ] in ["read", "readcfg"]:
+            return True
+        match data["key"]:
+            case "fnmode":
+                if int(data["value"]) in range(5) or data["operation"] == "read":
+                    return True
+                else:
+                    return False
+            case "idle_timeout" | "dim_timeout":
+                if int(data["value"]) >= -2 or data["operation"] == "read":
+                    return True
+                else:
+                    return False
+            case _:
+                return False
+    except:
+        return False
+
+
+# function for writing data to config file
+def writeToConfig(key: str, value: str):
+    config = configparser.ConfigParser()
+    config.read(CONFIG_PATH)
+    config["DEFAULT"][key] = value
+    try:
+        with open(CONFIG_PATH, "w") as f:
+            config.write(f)
+        return {
+            "status": "SUCCESS",
+            "message": f"Successfully wrote {value} to {key} in config file",
+        }
+    except:
+        return {"status": "ERROR", "message": f"Could not write to config file"}
+
 
 # Open socket
 server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -199,10 +272,33 @@ while True:
         # try to load JSON
         data = json.loads(rawjson)
         if data["fnmode"] == "read":
-            result = readFnmode()
+            result = read("fnmode")
+            if result["status"] != "ERROR":
+                result["message"] = str(result["value"])
             isPipeOpen = printAndSendResult(result, conn)
-        else:
-            result = writeFnmode(int(data["fnmode"]))
+        elif data["fnmode"] == 9:
+            # protocol v2 stuff
+            isValid = checkData(data)
+            if isValid:
+                match data["operation"]:
+                    case "read":
+                        result = read(data["key"])
+                        isPipeOpen = printAndSendResult(result, conn)
+                    case "write":
+                        result = write(data["key"], int(data["value"]))
+                        isPipeOpen = printAndSendResult(result, conn)
+                    case "readcfg":
+                        result = readFromConfig(data["key"])
+                        isPipeOpen = printAndSendResult(result, conn)
+                    case "writecfg":
+                        result = writeToConfig(data["key"], str(data["value"]))
+                        isPipeOpen = printAndSendResult(result, conn)
+            else:
+                error = {"status": "ERROR", "message": "Invalid data"}
+                isPipeOpen = printAndSendResult(error, conn)
+
+        elif int(data["fnmode"]) in range(5):
+            result = write("fnmode", int(data["fnmode"]))
             isPipeOpen = printAndSendResult(result, conn)
     except json.decoder.JSONDecodeError:
         # if payload is not valid JSON, send and print error message
@@ -215,7 +311,7 @@ while True:
         # if fnmode is not an integer or not "read", send and print error message
         error = {
             "status": "ERROR",
-            "message": 'Invalid fnmode: fnmode must be an integer between 0 and 4 or "read" to read the current fnmode',
+            "message": 'Invalid fnmode: fnmode must be an integer between 0 and 4, 9 for Protocol V2+, or "read" to read the current fnmode.',
         }
         isPipeOpen = printAndSendResult(error, conn)
     # Check if connection was broken and print warning if it was
