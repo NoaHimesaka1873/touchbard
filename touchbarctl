@@ -174,3 +174,7 @@ match args.command:
                 print(f"ERROR: {result['message']}")
                 exit(1)
             print(f"Dim timeout set to {result['value']}")
+    case _:
+        print("ERROR: unknown command")
+        parser.print_help()
+        exit(1)
