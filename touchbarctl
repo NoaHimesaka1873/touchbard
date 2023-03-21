@@ -27,7 +27,13 @@ def send_command(operation: str, key: str, value: str = ""):
     sock.send(json.dumps(command).encode("utf-8"))
 
     # receive and return response
-    return json.loads(sock.recv(1024).decode("utf-8"))
+    response = json.loads(sock.recv(1024).decode("utf-8"))
+
+    # close socket
+    sock.close()
+
+    # return response
+    return response
 
 
 parser = argparse.ArgumentParser(
