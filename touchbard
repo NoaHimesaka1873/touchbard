@@ -69,7 +69,7 @@ if not os.path.exists("/run/touchbard"):
 
 
 # Gracefully exit on SIGTERM or SIGINT
-def signal_handler(signal, frame):
+def signal_handler(signal, frame) -> None:
     global server
     print("Touchbar Daemon is shutting down...")
     server.close()
@@ -94,7 +94,7 @@ if os.path.exists(SOCKET_PATH):
 
 
 # function for reading fnmode
-def read(key: str):
+def read(key: str) -> dict:
     # check for possible fnmode locations
     paths = [Path(p) for p in glob(f"/sys/class/input/*/device/{key}")]
     for path in paths:
@@ -122,7 +122,7 @@ def read(key: str):
 
 
 # function for writing fnmode
-def write(key: str, value: int):
+def write(key: str, value: int) -> dict:
     # check for possible fnmode locations
     paths = [Path(p) for p in glob(f"/sys/class/input/*/device/{key}")]
     for path in paths:
@@ -150,7 +150,7 @@ def write(key: str, value: int):
 
 
 # function for reading from config file
-def readFromConfig(key: str):
+def readFromConfig(key: str) -> dict:
     config = configparser.ConfigParser()
     try:
         config.read(CONFIG_PATH)
@@ -180,14 +180,14 @@ def readFromConfig(key: str):
 
 
 # function for sending and printing fnmode
-def printAndSendResult(result, conn):
+def printAndSendResult(result, conn = None) -> bool:
     print(f"{result['status']}: {result['message']}")
+    if conn is None:
+        return True
     try:
         conn.send(json.dumps(result).encode("UTF-8"))
-    except BrokenPipeError:
+    except:
         return False
-    except AttributeError:
-        return True
     return True
 
 
@@ -204,7 +204,7 @@ for key in ["fnmode", "idle_timeout", "dim_timeout"]:
 
 
 # function for check whether value is valid
-def checkData(data: dict):
+def checkData(data: dict) -> bool:
     try:
         if int(data["version"]) != 2:
             return False
@@ -236,7 +236,7 @@ def checkData(data: dict):
 
 
 # function for writing data to config file
-def writeToConfig(key: str, value: str):
+def writeToConfig(key: str, value: str) -> dict:
     config = configparser.ConfigParser()
     config.read(CONFIG_PATH)
     config["DEFAULT"][key] = value
