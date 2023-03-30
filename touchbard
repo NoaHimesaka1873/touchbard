@@ -180,7 +180,7 @@ def readFromConfig(key: str) -> dict:
 
 
 # function for sending and printing fnmode
-def printAndSendResult(result, conn = None) -> bool:
+def printAndSendResult(result, conn=None) -> bool:
     print(f"{result['status']}: {result['message']}")
     if conn is None:
         return True

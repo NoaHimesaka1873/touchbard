@@ -41,6 +41,14 @@ parser = argparse.ArgumentParser(
     epilog="This program is part of Touchbar Daemon. For more information, see https://github.com/NoaHimesaka1873/touchbard",
 )
 
+parser.add_argument(
+    "--version",
+    "-v",
+    action="version",
+    version="touchbarctl 1.1.2",
+    help="show version and exit",
+)
+
 subparsers = parser.add_subparsers(dest="command", help="command to run")
 
 fnmode = subparsers.add_parser("fnmode", help="set function key mode")
