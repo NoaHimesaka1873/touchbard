@@ -119,6 +119,10 @@ match args.command:
                 print("ERROR: value must be in range 0-4")
                 exit(1)
             if args.persistent:
+                # check root
+                if os.geteuid() != 0:
+                    print("ERROR: you must be root to set persistent mode")
+                    exit(1)
                 result = send_command("writecfg", "fnmode", args.value)
                 if result["status"] == "ERROR":
                     print(f"ERROR: {result['message']}")
@@ -148,6 +152,9 @@ match args.command:
                 print("ERROR: value must be -2 or greater")
                 exit(1)
             if args.persistent:
+                if os.geteuid() != 0:
+                    print("ERROR: you must be root to set persistent mode")
+                    exit(1)
                 result = send_command("writecfg", "idle_timeout", args.value)
                 if result["status"] == "ERROR":
                     print(f"ERROR: {result['message']}")
@@ -177,6 +184,9 @@ match args.command:
                 print("ERROR: value must be -2 or greater")
                 exit(1)
             if args.persistent:
+                if os.geteuid() != 0:
+                    print("ERROR: you must be root to set persistent mode")
+                    exit(1)
                 result = send_command("writecfg", "dim_timeout", args.value)
                 if result["status"] == "ERROR":
                     print(f"ERROR: {result['message']}")

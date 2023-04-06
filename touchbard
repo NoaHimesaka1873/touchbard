@@ -3,6 +3,7 @@
 # Copyleft 2023 Noa Himesaka. Some rights reserved.
 
 import socket
+import struct
 import os, os.path
 import json
 import signal
@@ -264,6 +265,11 @@ os.chmod(PID_PATH, 0o600)
 while True:
     server.listen(1)
     conn, addr = server.accept()
+    # Get UID of socket client
+    creds = conn.getsockopt(
+        socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")
+    )
+    pid, uid, gid = struct.unpack("3i", creds)
     # Read data from socket, decode it, and load it as JSON
     rawjson = conn.recv(1024).decode("UTF-8")
     # Variable for checking whether pipe is still open
@@ -291,7 +297,13 @@ while True:
                         result = readFromConfig(data["key"])
                         isPipeOpen = printAndSendResult(result, conn)
                     case "writecfg":
-                        result = writeToConfig(data["key"], str(data["value"]))
+                        if uid == 0:
+                            result = writeToConfig(data["key"], str(data["value"]))
+                        else:
+                            result = {
+                                "status": "ERROR",
+                                "message": "You must be root to write to config",
+                            }
                         isPipeOpen = printAndSendResult(result, conn)
             else:
                 error = {"status": "ERROR", "message": "Invalid data"}
