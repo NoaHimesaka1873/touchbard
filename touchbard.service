@@ -6,6 +6,7 @@ Type=simple
 Restart=always
 RestartSec=2
 ExecStart=/usr/bin/touchbard
+PIDFile=/run/touchbard/touchbard.pid
 
 [Install]
 WantedBy=default.target
