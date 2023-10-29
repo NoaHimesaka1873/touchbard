@@ -1,3 +1,6 @@
+# ABANDONED
+Please use [tiny-dfr](https://github.com/kekrby/tiny-dfr) instead.
+
 # touchbard
 Simple and working daemon for configuring Touch Bar mode
 
